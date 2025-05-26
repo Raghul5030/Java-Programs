@@ -1,1 +1,629 @@
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.text.NumberFormat;
+import java.util.regex.Pattern;
+
+// Room class to represent individual rooms
+class Room {
+    private int roomNumber;
+    private String roomType;
+    private double pricePerNight;
+    private boolean isAvailable;
+    private List<String> amenities;
+    private int maxOccupancy;
+
+    public Room(int roomNumber, String roomType, double pricePerNight, int maxOccupancy) {
+        this.roomNumber = roomNumber;
+        this.roomType = roomType;
+        this.pricePerNight = pricePerNight;
+        this.isAvailable = true;
+        this.amenities = new ArrayList<>();
+        this.maxOccupancy = maxOccupancy;
+    }
+
+    // Getters and Setters
+    public int getRoomNumber() { return roomNumber; }
+    public String getRoomType() { return roomType; }
+    public double getPricePerNight() { return pricePerNight; }
+    public boolean isAvailable() { return isAvailable; }
+    public void setAvailable(boolean available) { isAvailable = available; }
+    public List<String> getAmenities() { return amenities; }
+    public void addAmenity(String amenity) { amenities.add(amenity); }
+    public int getMaxOccupancy() { return maxOccupancy; }
+
+    @Override
+    public String toString() {
+        NumberFormat inrFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("hi-IN"));
+        return String.format("Room %d (%s) - %s/night - Max %d guests - %s", 
+            roomNumber, roomType, inrFormat.format(pricePerNight), maxOccupancy,
+            isAvailable ? "Available" : "Occupied");
+    }
+}
+
+// Guest class to represent customers
+class Guest {
+    private String guestId;
+    private String name;
+    private String email;
+    private String mobile;
+    private int numberOfMembers;
+
+    public Guest(String guestId, String name, String email, String mobile, int numberOfMembers) {
+        this.guestId = guestId;
+        this.name = name;
+        this.email = email;
+        this.mobile = mobile;
+        this.numberOfMembers = numberOfMembers;
+    }
+
+    // Getters
+    public String getGuestId() { return guestId; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public String getMobile() { return mobile; }
+    public int getNumberOfMembers() { return numberOfMembers; }
+
+    @Override
+    public String toString() {
+        return String.format("Guest: %s (ID: %s, Email: %s, Mobile: %s, Members: %d)", 
+            name, guestId, email, mobile, numberOfMembers);
+    }
+}
+
+// Booking class to represent reservations
+class Booking {
+    private String bookingId;
+    private Guest guest;
+    private Room room;
+    private LocalDateTime checkInDateTime;
+    private LocalDateTime checkOutDateTime;
+    private double totalAmount;
+    private String status;
+    private String bookingMode;
+    private LocalDateTime bookingCreatedAt;
+
+    public Booking(String bookingId, Guest guest, Room room, 
+                   LocalDateTime checkInDateTime, LocalDateTime checkOutDateTime, String bookingMode) {
+        this.bookingId = bookingId;
+        this.guest = guest;
+        this.room = room;
+        this.checkInDateTime = checkInDateTime;
+        this.checkOutDateTime = checkOutDateTime;
+        this.status = "CONFIRMED";
+        this.bookingMode = bookingMode;
+        this.bookingCreatedAt = LocalDateTime.now();
+        calculateTotalAmount();
+    }
+
+    private void calculateTotalAmount() {
+        long hours = java.time.Duration.between(checkInDateTime, checkOutDateTime).toHours();
+        if (bookingMode.equals("HOURLY")) {
+            // Hourly rate is 1/24th of daily rate
+            this.totalAmount = (hours * room.getPricePerNight()) / 24.0;
+        } else {
+            // Daily booking - calculate by days
+            long days = Math.max(1, hours / 24); // Minimum 1 day
+            this.totalAmount = days * room.getPricePerNight();
+        }
+    }
+
+    // Getters
+    public String getBookingId() { return bookingId; }
+    public Guest getGuest() { return guest; }
+    public Room getRoom() { return room; }
+    public LocalDateTime getCheckInDateTime() { return checkInDateTime; }
+    public LocalDateTime getCheckOutDateTime() { return checkOutDateTime; }
+    public double getTotalAmount() { return totalAmount; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getBookingMode() { return bookingMode; }
+    public LocalDateTime getBookingCreatedAt() { return bookingCreatedAt; }
+
+    @Override
+    public String toString() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        NumberFormat inrFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("hi-IN"));
+        
+        String duration;
+        if (bookingMode.equals("HOURLY")) {
+            long hours = java.time.Duration.between(checkInDateTime, checkOutDateTime).toHours();
+            duration = hours + " hour(s)";
+        } else {
+            long days = Math.max(1, java.time.Duration.between(checkInDateTime, checkOutDateTime).toHours() / 24);
+            duration = days + " day(s)";
+        }
+        
+        return String.format("Booking %s - %s - Room %d - %s to %s - Members: %d - %s (%s) - Mode: %s - Duration: %s",
+            bookingId, guest.getName(), room.getRoomNumber(),
+            checkInDateTime.format(formatter), checkOutDateTime.format(formatter),
+            guest.getNumberOfMembers(), inrFormat.format(totalAmount), status, bookingMode, duration);
+    }
+}
+
+// Hotel class to represent the hotel
+class Hotel {
+    private String hotelName;
+    private String address;
+    private List<Room> rooms;
+    private List<Booking> bookings;
+    private int bookingCounter;
+
+    public Hotel(String hotelName, String address) {
+        this.hotelName = hotelName;
+        this.address = address;
+        this.rooms = new ArrayList<>();
+        this.bookings = new ArrayList<>();
+        this.bookingCounter = 1000;
+        initializeRooms();
+    }
+
+    private void initializeRooms() {
+        // Add some sample rooms with INR pricing and max occupancy
+        rooms.add(new Room(101, "Single", 6500.00, 2));
+        rooms.add(new Room(102, "Single", 6500.00, 2));
+        rooms.add(new Room(201, "Double", 9800.00, 4));
+        rooms.add(new Room(202, "Double", 9800.00, 4));
+        rooms.add(new Room(301, "Suite", 16500.00, 4));
+        rooms.add(new Room(302, "Deluxe Suite", 28000.00, 4));
+
+        // Add amenities
+        for (Room room : rooms) {
+            room.addAmenity("WiFi");
+            room.addAmenity("TV");
+            if (room.getRoomType().contains("Suite")) {
+                room.addAmenity("Mini Bar");
+                room.addAmenity("Balcony");
+            }
+        }
+    }
+
+    public List<Room> getAvailableRooms() {
+        return rooms.stream()
+                   .filter(Room::isAvailable)
+                   .collect(Collectors.toList());
+    }
+
+    public List<Room> getAvailableRoomsByType(String roomType) {
+        return rooms.stream()
+                   .filter(room -> room.isAvailable() && 
+                          room.getRoomType().equalsIgnoreCase(roomType))
+                   .collect(Collectors.toList());
+    }
+
+    public Room getRoomByNumber(int roomNumber) {
+        return rooms.stream()
+                   .filter(room -> room.getRoomNumber() == roomNumber)
+                   .findFirst()
+                   .orElse(null);
+    }
+
+    public String makeBooking(Guest guest, int roomNumber, 
+                            LocalDateTime checkIn, LocalDateTime checkOut, String bookingMode) {
+        Room room = getRoomByNumber(roomNumber);
+        
+        if (room == null) {
+            return "Room not found!";
+        }
+        
+        if (!room.isAvailable()) {
+            return "Room is not available!";
+        }
+        
+        if (guest.getNumberOfMembers() > room.getMaxOccupancy()) {
+            return String.format("Room capacity exceeded! This room can accommodate maximum %d guests, but you have %d members.", 
+                room.getMaxOccupancy(), guest.getNumberOfMembers());
+        }
+        
+        if (checkIn.isAfter(checkOut) || checkIn.isBefore(LocalDateTime.now())) {
+            return "Invalid dates/times!";
+        }
+
+        // Validate booking duration based on mode
+        long hours = java.time.Duration.between(checkIn, checkOut).toHours();
+        if (bookingMode.equals("HOURLY") && hours < 1) {
+            return "Hourly booking must be at least 1 hour!";
+        }
+        if (bookingMode.equals("DAILY") && hours < 24) {
+            return "Daily booking must be at least 24 hours!";
+        }
+
+        String bookingId = "BK" + (++bookingCounter);
+        Booking booking = new Booking(bookingId, guest, room, checkIn, checkOut, bookingMode);
+        bookings.add(booking);
+        room.setAvailable(false);
+        
+        return "Booking confirmed! Booking ID: " + bookingId;
+    }
+
+    public boolean cancelBooking(String bookingId) {
+        Booking booking = bookings.stream()
+                                .filter(b -> b.getBookingId().equals(bookingId))
+                                .findFirst()
+                                .orElse(null);
+        
+        if (booking != null) {
+            booking.setStatus("CANCELLED");
+            booking.getRoom().setAvailable(true);
+            return true;
+        }
+        return false;
+    }
+
+    public List<Booking> getBookingsByGuest(String guestId) {
+        return bookings.stream()
+                      .filter(booking -> booking.getGuest().getGuestId().equals(guestId))
+                      .collect(Collectors.toList());
+    }
+
+    public void displayHotelInfo() {
+        System.out.println("=== " + hotelName + " ===");
+        System.out.println("Address: " + address);
+        System.out.println("Total Rooms: " + rooms.size());
+        System.out.println("Available Rooms: " + getAvailableRooms().size());
+        System.out.println("Booking Modes: HOURLY (minimum 1 hour) & DAILY (minimum 24 hours)");
+    }
+
+    public void displayAvailableRooms() {
+        System.out.println("\n=== Available Rooms ===");
+        getAvailableRooms().forEach(System.out::println);
+        System.out.println("\nHourly Rate: 1/24th of daily rate");
+    }
+
+    public void displayAllBookings() {
+        System.out.println("\n=== All Bookings ===");
+        bookings.forEach(System.out::println);
+    }
+
+    // Getters
+    public String getHotelName() { return hotelName; }
+    public List<Room> getRooms() { return rooms; }
+    public List<Booking> getBookings() { return bookings; }
+}
+
+// Main Hotel Booking System
+public class HotelBookingSystem {
+    private Hotel hotel;
+    private Scanner scanner;
+    private Map<String, Guest> guests;
+    
+    // Validation patterns
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+        "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    );
+    private static final Pattern MOBILE_PATTERN = Pattern.compile(
+        "^[6-9]\\d{9}$" // Indian mobile number format
+    );
+
+    public HotelBookingSystem() {
+        hotel = new Hotel("Grand Palace Hotel", "123 Main Street, City Center");
+        scanner = new Scanner(System.in);
+        guests = new HashMap<>();
+        initializeSampleGuests();
+    }
+
+    private void initializeSampleGuests() {
+        guests.put("G001", new Guest("G001", "John Doe", "john@email.com", "9876543210", 2));
+        guests.put("G002", new Guest("G002", "Jane Smith", "jane@email.com", "8765432109", 1));
+        guests.put("G003", new Guest("G003", "Bob Johnson", "bob@email.com", "7654321098", 3));
+    }
+
+    public void run() {
+        System.out.println("Welcome to the Hotel Booking System!");
+        System.out.println("📧 Email Format: example@domain.com");
+        System.out.println("📱 Mobile Format: 10-digit Indian number (starting with 6-9)");
+        System.out.println("🕐 Booking Modes: HOURLY (min 1 hour) or DAILY (min 24 hours)");
+        
+        while (true) {
+            displayMenu();
+            int choice = getIntInput("Enter your choice: ");
+            
+            switch (choice) {
+                case 1:
+                    hotel.displayHotelInfo();
+                    break;
+                case 2:
+                    hotel.displayAvailableRooms();
+                    break;
+                case 3:
+                    makeBooking();
+                    break;
+                case 4:
+                    cancelBooking();
+                    break;
+                case 5:
+                    viewBookings();
+                    break;
+                case 6:
+                    addNewGuest();
+                    break;
+                case 7:
+                    hotel.displayAllBookings();
+                    break;
+                case 8:
+                    System.out.println("Thank you for using Hotel Booking System!");
+                    return;
+                default:
+                    System.out.println("Invalid choice! Please try again.");
+            }
+            
+            System.out.println("\nPress Enter to continue...");
+            scanner.nextLine();
+        }
+    }
+
+    private void displayMenu() {
+        System.out.println("\n=== Hotel Booking System Menu ===");
+        System.out.println("1. View Hotel Information");
+        System.out.println("2. View Available Rooms");
+        System.out.println("3. Make a Booking");
+        System.out.println("4. Cancel Booking");
+        System.out.println("5. View My Bookings");
+        System.out.println("6. Add New Guest");
+        System.out.println("7. View All Bookings");
+        System.out.println("8. Exit");
+    }
+
+    private void makeBooking() {
+        System.out.println("\n=== Make a Booking ===");
+        
+        // Get customer details with validation
+        System.out.println("Please provide your details:");
+        String name = getValidatedNameInput();
+        String email = getValidatedEmailInput();
+        String mobile = getValidatedMobileInput();
+        
+        // Get number of members with validation
+        final int numberOfMembers;
+        while (true) {
+            int tempMembers = getIntInput("Enter number of members (maximum 4 per room): ");
+            if (tempMembers > 0 && tempMembers <= 4) {
+                numberOfMembers = tempMembers;
+                break;
+            } else {
+                System.out.println("❌ Invalid number! Please enter between 1 and 4 members.");
+            }
+        }
+        
+        // Create guest
+        String guestId = "G" + String.format("%03d", guests.size() + 1);
+        Guest guest = new Guest(guestId, name, email, mobile, numberOfMembers);
+        guests.put(guestId, guest);
+        
+        System.out.println("✅ Guest registered successfully!");
+        System.out.println(guest.toString());
+
+        // Select booking mode
+        String bookingMode = getBookingMode();
+        
+        // Show available rooms that can accommodate the number of members
+        System.out.println("\n=== Available Rooms for " + numberOfMembers + " member(s) ===");
+        List<Room> suitableRooms = hotel.getAvailableRooms().stream()
+                                       .filter(room -> room.getMaxOccupancy() >= numberOfMembers)
+                                       .collect(Collectors.toList());
+        
+        if (suitableRooms.isEmpty()) {
+            System.out.println("❌ Sorry, no rooms available that can accommodate " + numberOfMembers + " members.");
+            return;
+        }
+        
+        suitableRooms.forEach(System.out::println);
+        
+        int roomNumber = getIntInput("Enter room number: ");
+        
+        // Validate room selection
+        Room selectedRoom = hotel.getRoomByNumber(roomNumber);
+        if (selectedRoom == null || !selectedRoom.isAvailable() || 
+            selectedRoom.getMaxOccupancy() < numberOfMembers) {
+            System.out.println("❌ Invalid room selection or room cannot accommodate " + numberOfMembers + " members!");
+            return;
+        }
+        
+        // Get date and time based on booking mode
+        LocalDateTime checkIn, checkOut;
+        if (bookingMode.equals("HOURLY")) {
+            checkIn = getDateTimeInput("Enter check-in date and time (YYYY-MM-DD HH:MM): ");
+            if (checkIn == null) return;
+            
+            int hours = getIntInput("Enter duration in hours (minimum 1): ");
+            if (hours < 1) {
+                System.out.println("❌ Minimum booking duration is 1 hour!");
+                return;
+            }
+            checkOut = checkIn.plusHours(hours);
+        } else {
+            checkIn = getDateTimeInput("Enter check-in date and time (YYYY-MM-DD HH:MM): ");
+            if (checkIn == null) return;
+            
+            int days = getIntInput("Enter duration in days (minimum 1): ");
+            if (days < 1) {
+                System.out.println("❌ Minimum booking duration is 1 day!");
+                return;
+            }
+            checkOut = checkIn.plusDays(days);
+        }
+
+        String result = hotel.makeBooking(guest, roomNumber, checkIn, checkOut, bookingMode);
+        System.out.println(result);
+        
+        // Show booking details with amount
+        if (result.contains("confirmed")) {
+            Room bookedRoom = hotel.getRoomByNumber(roomNumber);
+            if (bookedRoom != null) {
+                long hours = java.time.Duration.between(checkIn, checkOut).toHours();
+                double totalAmount;
+                String durationText;
+                
+                if (bookingMode.equals("HOURLY")) {
+                    totalAmount = (hours * bookedRoom.getPricePerNight()) / 24.0;
+                    durationText = hours + " hour(s)";
+                } else {
+                    long days = Math.max(1, hours / 24);
+                    totalAmount = days * bookedRoom.getPricePerNight();
+                    durationText = days + " day(s)";
+                }
+                
+                NumberFormat inrFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("hi-IN"));
+                System.out.println("💰 Total Amount: " + inrFormat.format(totalAmount) + " for " + durationText);
+                System.out.println("👥 Room accommodates: " + numberOfMembers + " member(s)");
+                System.out.println("📅 Mode: " + bookingMode);
+                System.out.println("📧 Confirmation will be sent to: " + email);
+                System.out.println("📱 SMS will be sent to: " + mobile);
+            }
+        }
+    }
+
+    private String getBookingMode() {
+        System.out.println("\n=== Select Booking Mode ===");
+        System.out.println("1. HOURLY (Minimum 1 hour, Rate: 1/24th of daily rate)");
+        System.out.println("2. DAILY (Minimum 24 hours, Standard daily rate)");
+        
+        while (true) {
+            int choice = getIntInput("Enter your booking mode choice (1 or 2): ");
+            switch (choice) {
+                case 1:
+                    return "HOURLY";
+                case 2:
+                    return "DAILY";
+                default:
+                    System.out.println("❌ Invalid choice! Please select 1 or 2.");
+            }
+        }
+    }
+
+    private String getValidatedNameInput() {
+        while (true) {
+            String name = getStringInput("Enter your full name: ");
+            if (name.length() >= 2 && name.matches("[a-zA-Z\\s]+")) {
+                return name;
+            } else {
+                System.out.println("❌ Invalid name! Please enter a valid name (letters and spaces only, minimum 2 characters).");
+            }
+        }
+    }
+
+    private String getValidatedEmailInput() {
+        while (true) {
+            String email = getStringInput("Enter your email (format: example@domain.com): ");
+            if (EMAIL_PATTERN.matcher(email).matches()) {
+                return email;
+            } else {
+                System.out.println("❌ Invalid email format! Please enter a valid email address.");
+            }
+        }
+    }
+
+    private String getValidatedMobileInput() {
+        while (true) {
+            String mobile = getStringInput("Enter your mobile number (10 digits, starting with 6-9): ");
+            if (MOBILE_PATTERN.matcher(mobile).matches()) {
+                return mobile;
+            } else {
+                System.out.println("❌ Invalid mobile number! Please enter a 10-digit Indian mobile number starting with 6-9.");
+            }
+        }
+    }
+
+    private void cancelBooking() {
+        System.out.println("\n=== Cancel Booking ===");
+        String bookingId = getStringInput("Enter Booking ID: ");
+        
+        if (hotel.cancelBooking(bookingId)) {
+            System.out.println("✅ Booking cancelled successfully!");
+        } else {
+            System.out.println("❌ Booking not found!");
+        }
+    }
+
+    private void viewBookings() {
+        System.out.println("\n=== View Bookings ===");
+        String email = getValidatedEmailInput();
+        
+        // Find guest by email
+        Guest guest = guests.values().stream()
+                          .filter(g -> g.getEmail().equalsIgnoreCase(email))
+                          .findFirst()
+                          .orElse(null);
+        
+        if (guest == null) {
+            System.out.println("❌ No guest found with this email address.");
+            return;
+        }
+        
+        List<Booking> guestBookings = hotel.getBookingsByGuest(guest.getGuestId());
+        
+        if (guestBookings.isEmpty()) {
+            System.out.println("📭 No bookings found for this guest.");
+        } else {
+            System.out.println("📋 Bookings for " + guest.getName() + ":");
+            guestBookings.forEach(System.out::println);
+        }
+    }
+
+    private void addNewGuest() {
+        System.out.println("\n=== Add New Guest ===");
+        String guestId = "G" + String.format("%03d", guests.size() + 1);
+        String name = getValidatedNameInput();
+        String email = getValidatedEmailInput();
+        String mobile = getValidatedMobileInput();
+        
+        final int numberOfMembers;
+        while (true) {
+            int tempMembers = getIntInput("Enter number of members (maximum 4): ");
+            if (tempMembers > 0 && tempMembers <= 4) {
+                numberOfMembers = tempMembers;
+                break;
+            } else {
+                System.out.println("❌ Invalid number! Please enter between 1 and 4 members.");
+            }
+        }
+        
+        Guest newGuest = new Guest(guestId, name, email, mobile, numberOfMembers);
+        guests.put(guestId, newGuest);
+        
+        System.out.println("✅ Guest added successfully! Guest ID: " + guestId);
+    }
+
+    private String getStringInput(String prompt) {
+        System.out.print(prompt);
+        return scanner.nextLine().trim();
+    }
+
+    private int getIntInput(String prompt) {
+        while (true) {
+            try {
+                System.out.print(prompt);
+                return Integer.parseInt(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("❌ Please enter a valid number.");
+            }
+        }
+    }
+
+    private LocalDateTime getDateTimeInput(String prompt) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        while (true) {
+            try {
+                String dateTimeStr = getStringInput(prompt);
+                LocalDateTime dateTime = LocalDateTime.parse(dateTimeStr, formatter);
+                
+                if (dateTime.isBefore(LocalDateTime.now())) {
+                    System.out.println("❌ Date and time cannot be in the past! Please enter a future date and time.");
+                    continue;
+                }
+                
+                return dateTime;
+            } catch (DateTimeParseException e) {
+                System.out.println("❌ Invalid date/time format! Please use YYYY-MM-DD HH:MM format (e.g., 2024-12-25 14:30).");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        HotelBookingSystem system = new HotelBookingSystem();
+        system.run();
+    }
+}
